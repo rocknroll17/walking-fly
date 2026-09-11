@@ -99,6 +99,7 @@ def main() -> None:
     ap.add_argument("--interval", type=float, default=120)
     ap.add_argument("--out", default=str(fm.ROOT / "web/assets/policy.json"))
     ap.add_argument("--no_clips", action="store_true")
+    ap.add_argument("--clip_every", type=int, default=4, help="render a clip every N checkpoints")
     args = ap.parse_args()
     from brax.training.agents.ppo import checkpoint
     last = None
@@ -153,7 +154,8 @@ def main() -> None:
                 _export_progress(run, Path(args.out).parent / "progress.json")
                 last = ck                                    # evaluated: never re-append this checkpoint
                 print(f"exported checkpoint {ck.name} -> {args.out}", flush=True)
-                if not args.no_clips:
+                n_exported = locals().get("n_exported", 0) + 1
+                if not args.no_clips and (n_exported - 1) % args.clip_every == 0:
                     try:
                         _render_clip(spec, Path(args.out).parent / "clips", f"{run.name}_{int(ck.name):09d}")
                     except Exception as e:                   # no EGL / ffmpeg: clips are optional

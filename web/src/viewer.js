@@ -264,7 +264,7 @@ $('follow').onchange = (e) => { follow = e.target.checked; };
 $('reload').onclick = () => loadPolicy();
 $('assist').onchange = (e) => { assistOn = e.target.checked; applyAssist(); };
 $('noise').onchange = (e) => { noiseOn = e.target.checked; };
-setInterval(loadPolicy, 120000);   // pick up new checkpoints while training runs
+setInterval(loadPolicy, 30000);    // pick up new checkpoints while training runs
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 let last = performance.now(), lastHud = 0;

@@ -3,7 +3,8 @@
 #   trainer  : flybiped.autopilot (curriculum loop, spawns flybiped.train chunks on the GPU)
 #   watcher  : flybiped.watch_export (CPU: exports checkpoints for the viewer, evaluates, renders clips)
 #   web      : static server for the viewer and status page
-# Usage: bash scripts/run.sh start|stop|status|logs   [--port 8765] [--fresh] [--resume bundle.tar.gz]
+# Usage: bash scripts/run.sh start|stop|status|logs|watcher   [--port 8765] [--fresh] [--resume bundle.tar.gz]
+#   watcher: restart only the checkpoint watcher (after a git pull), training keeps running
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -20,7 +21,7 @@ start_web() {
 }
 start_watcher() {
   if [[ -z "$(pid_of 'flybiped[.]watch_export')" ]]; then
-    JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES="" setsid nohup .venv/bin/python -m flybiped.watch_export --follow runs/ACTIVE --interval 30 > runs/watch_export.log 2>&1 < /dev/null &
+    JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES="" setsid nohup .venv/bin/python -m flybiped.watch_export --follow runs/ACTIVE --interval 10 > runs/watch_export.log 2>&1 < /dev/null &
   fi
 }
 start_trainer() {
@@ -62,5 +63,6 @@ case "$CMD" in
   stop)   stop_all; echo stopped ;;
   status) status ;;
   logs)   tail -n 20 runs/autopilot.log runs/watch_export.log 2>/dev/null ;;
-  *) echo "usage: bash scripts/run.sh start|stop|status|logs [--port N] [--fresh]"; exit 1 ;;
+  watcher) pgrep -f 'flybiped[.]watch_export' | xargs -r kill 2>/dev/null; sleep 1; start_watcher; echo "watcher restarted" ;;
+  *) echo "usage: bash scripts/run.sh start|stop|status|logs|watcher [--port N] [--fresh] [--resume bundle]"; exit 1 ;;
 esac
