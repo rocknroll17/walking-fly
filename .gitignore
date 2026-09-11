@@ -1,0 +1,17 @@
+# generated at setup / runtime
+.venv/
+ext/
+build/
+runs/
+web/node_modules/
+web/assets/*.obj
+web/assets/biped.xml
+web/assets/manifest.txt
+web/assets/policy.json
+web/assets/progress.json
+web/assets/autopilot.json
+web/assets/clips/
+__pycache__/
+*.pyc
+web/package-lock.json
+.claude/

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlyBiped Viewer</title>
+<style>
+html,body{margin:0;height:100%;background:#1a2230;color:#e8e6df;font-family:system-ui,"Noto Sans KR",sans-serif;overflow:hidden}
+#hud{position:fixed;top:12px;left:12px;background:rgba(10,14,20,.8);padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.7;width:300px}
+#hud b{font-family:monospace;font-size:14px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.section{border-top:1px solid #33404f;margin-top:8px;padding-top:8px}
+button,select{padding:5px 10px;background:#2b3a4f;color:#fff;border:1px solid #4a5a70;border-radius:6px;cursor:pointer;font-size:12px}
+button:hover{background:#3b4d66}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pill{padding:1px 10px;border-radius:999px;font-family:monospace;font-size:12px}
+.on{background:#1f7a48} .off{background:#5a4a20} .bad{background:#7a2a1f}
+.flash{color:#ffd166}
+#status{position:fixed;bottom:12px;left:12px;font-size:12px;color:#aab;max-width:80vw}
+#help{position:fixed;top:12px;right:12px;background:rgba(10,14,20,.8);padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.6;width:260px;color:#c9cbd3}
+#help h3{margin:0 0 6px;font-size:13px;color:#fff}
+</style></head>
+<body>
+<div id="hud">
+  <div class="row"><span>정책</span><b id="policy">-</b></div>
+  <div class="row"><span>목표 시야</span><b id="see">-</b></div>
+  <div class="row"><span>목표까지</span><b id="dist">-</b></div>
+  <div class="row"><span>도달한 목표</span><b id="goals">0</b></div>
+  <div class="row"><span>몸통 높이</span><b id="height">-</b></div>
+  <div class="row"><span>행동 변화량</span><b id="achg">-</b></div>
+  <div class="row"><span>걸음 형태</span><b id="gait">-</b></div>
+  <div class="row"><span>시뮬 시간 / 속도</span><b><span id="time">0.00 s</span> · <span id="rt">-</span></b></div>
+  <div class="section">
+    <div class="row"><span>재생 속도</span>
+      <select id="speed"><option value="0.05">0.05x</option><option value="0.1">0.1x</option><option value="0.2" selected>0.2x (기본)</option><option value="0.5">0.5x</option><option value="1">1x (실제 시간과 동일)</option></select></div>
+    <div class="mute" style="font-size:11px;color:#9aa">실제 초파리는 초당 10걸음, 최대 3cm/s로 움직여 1배속은 눈으로 못 따라갑니다. 연구도 250Hz 고속촬영을 느리게 봅니다.</div>
+    <div class="row"><label><input type="checkbox" id="follow" checked> 카메라가 초파리를 따라감</label></div>
+    <div class="row"><label><input type="checkbox" id="noise" checked> 탐색 노이즈 포함 (학습 중 실제 행동). 끄면 평균 행동만</label></div>
+    <div class="row"><label><input type="checkbox" id="assist"> 학습 보조력 켜기 (걷기 단계는 몸무게 일부를 위로 받쳐 주며 배웁니다)</label></div>
+    <div class="btns">
+      <button id="reset">6족 자세에서 다시</button><button id="resetBiped">뒷다리 서기에서 다시</button><button id="resetDrop">공중에서 떨어뜨리기</button><button id="resetFlip">뒤집힌 채 시작</button>
+      <button id="pause">⏸ 일시정지</button><button id="reload">최신 정책 받기</button>
+    </div>
+  </div>
+</div>
+<div id="help"><h3>보는 법</h3>
+초파리가 <b>6족 자세</b>에서 시작해 스스로 <b>뒷다리로 일어서서</b> 빨간 공(목표)까지 걸어가는 것이 목표입니다. 목표에 닿으면 새 목표가 생깁니다.<br>
+정책은 학습 서버에서 2분마다 자동 갱신됩니다. 초반 정책은 버둥거리거나 가만히 있는 게 정상입니다.<br>
+입력은 관절 각도, IMU, 발끝 촉각, 눈에 보이는 목표 방향뿐입니다(시뮬레이터 내부 좌표 없음).</div>
+<div id="status">불러오는 중...</div>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module" src="./src/viewer.js?v=1789139869"></script>
+</body></html>
