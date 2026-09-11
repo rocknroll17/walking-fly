@@ -25,6 +25,16 @@ bash scripts/run.sh start      # 학습(GPU) + 체크포인트 감시(CPU) + 웹
 요구 사항: Linux, NVIDIA GPU(Volta 이상, 드라이버 ≥ 525, 8 GB VRAM 이상), Node.js ≥ 18(뷰어), 인터넷(최초 설치).
 EGL 헤드리스 렌더링이 없는 머신에서는 `MUJOCO_GL=osmesa bash scripts/run.sh start` 로 클립 렌더를 대체할 수 있습니다.
 
+## 다른 서버로 옮겨서 이어 학습하기
+
+```bash
+# 원래 서버에서: 최신 체크포인트 + 커리큘럼 단계 + 누적 스텝을 한 파일로
+bash scripts/migrate.sh pack            # -> runs/bundle.tar.gz (수 MB)
+# 새 서버에서:
+git clone https://github.com/rocknroll17/walking-fly.git && cd walking-fly && bash scripts/setup.sh
+bash scripts/run.sh start --resume bundle.tar.gz
+```
+
 ## 구조
 
 ```

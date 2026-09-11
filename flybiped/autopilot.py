@@ -138,6 +138,7 @@ def main() -> None:
         run = RUNS / f"auto{args.tag}_{k:02d}_{stage['name']}{suffix}"
         run.mkdir(parents=True, exist_ok=True)
         print(f"== chunk {k}: {run.name} override={override} restore={restore}", flush=True)
+        state_file.write_text(json.dumps(state, indent=1))   # phase/assist visible while the chunk runs (migrate.sh)
         train_chunk(run, restore, args.chunk, override)
         ev = last_evals(run)
         if ev:

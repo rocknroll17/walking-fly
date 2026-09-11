@@ -3,12 +3,12 @@
 #   trainer  : flybiped.autopilot (curriculum loop, spawns flybiped.train chunks on the GPU)
 #   watcher  : flybiped.watch_export (CPU: exports checkpoints for the viewer, evaluates, renders clips)
 #   web      : static server for the viewer and status page
-# Usage: bash scripts/run.sh start|stop|status|logs   [--port 8765] [--fresh]
+# Usage: bash scripts/run.sh start|stop|status|logs   [--port 8765] [--fresh] [--resume bundle.tar.gz]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-PORT=8765; FRESH=0; CMD="${1:-status}"; shift || true
-while [[ $# -gt 0 ]]; do case "$1" in --port) PORT="$2"; shift 2;; --fresh) FRESH=1; shift;; *) shift;; esac; done
+PORT=8765; FRESH=0; RESUME=""; CMD="${1:-status}"; shift || true
+while [[ $# -gt 0 ]]; do case "$1" in --port) PORT="$2"; shift 2;; --fresh) FRESH=1; shift;; --resume) RESUME="$2"; shift 2;; *) shift;; esac; done
 export MUJOCO_GL=${MUJOCO_GL:-egl}
 mkdir -p runs
 pid_of() { pgrep -f "$1" | head -1 || true; }
@@ -26,7 +26,16 @@ start_watcher() {
 start_trainer() {
   [[ -n "$(pid_of 'flybiped[.]autopilot')" ]] && return
   local args=(--chunk 10e6 --budget 400e6)
-  if [[ $FRESH -eq 0 ]]; then
+  if [[ -n "$RESUME" ]]; then
+    # Continue from a bundle made by scripts/migrate.sh on another machine.
+    rm -rf runs/imported && mkdir -p runs/imported && tar -xzf "$RESUME" -C runs/imported --strip-components=1
+    local phase assist off
+    phase=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['phase'])")
+    assist=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['assist'])")
+    off=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['step_offset'])")
+    args+=(--start runs/imported --phase "$phase" --assist "$assist" --step_offset "$off")
+    echo "resuming from bundle: phase=$phase assist=$assist steps=$off"
+  elif [[ $FRESH -eq 0 ]]; then
     local latest; latest=$(ls -td runs/*/checkpoints 2>/dev/null | head -1 | xargs -r dirname || true)
     if [[ -n "$latest" ]]; then
       local off=0; [[ -f "$latest/step_offset.json" ]] && off=$(python3 -c "import json;print(json.load(open('$latest/step_offset.json'))['offset'])")
