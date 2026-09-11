@@ -55,6 +55,7 @@ def default_config() -> config_dict.ConfigDict:
             height=1.0,        # thorax height ramp from stance to bipedal height
             orientation=0.5,   # thorax orientation like the bipedal pose (sharp, near the target)
             upright=0.5,       # smooth cosine term: has gradient even when upside down (self-righting)
+            posture=0.5,       # legs near the default stance angles once the body faces up (Go1 Getup "posture")
             fore_contact=-0.3, # any front/middle leg touching the floor
             body_contact=-1.0, # thorax/head/abdomen/wings touching the floor
             action_rate=-0.002,
@@ -154,6 +155,7 @@ class FlyBiped(mjx_env.MjxEnv):
         self._torque_act = jp.array([], dtype=jp.int32)
         self._adh_act = jp.array([i for i, n in enumerate(aname) if "adhere" in n])
         self._leg_act = jp.array([i for i, n in enumerate(aname) if "_T" in n and "adhere" not in n])
+        self._leg_qadr = jp.array([m.jnt_qposadr[j] for j in range(m.njnt) if "_T" in m.joint(j).name])
         self._weight = float(m.body_subtreemass[self._thorax] * -m.opt.gravity[2])   # dyn
         self._ctrl_lo = jp.array(m.actuator_ctrlrange[:, 0])
         self._ctrl_hi = jp.array(m.actuator_ctrlrange[:, 1])
@@ -169,6 +171,7 @@ class FlyBiped(mjx_env.MjxEnv):
         self._q_biped = jp.array(pose["qpos_settled"])
         self._ctrl_biped = jp.array(pose["ctrl"])
         self._ctrl0 = self._ctrl_stance   # action centre
+        self._leg_q_stance = self._q_stance[self._leg_qadr]
         q = self._q_biped[3:7]
         self._gravity_biped = mjx_math.rotate(jp.array([0.0, 0, -1]), mjx_math.quat_inv(q))
 
@@ -440,6 +443,9 @@ class FlyBiped(mjx_env.MjxEnv):
             "height": jp.clip((height - cfg.height_stance) / (cfg.height_target - cfg.height_stance), 0.0, 1.0),
             "orientation": jp.exp(-2.0 * jp.sum(jp.square(gravity - self._gravity_biped))),
             "upright": 0.5 * (1.0 + jp.dot(gravity, self._gravity_biped)),   # -1 (on its back) .. +1 (upright) -> 0..1
+            # Once the body faces up, pull the legs back to the stance angles so it stands instead of lying on them.
+            "posture": (jp.dot(gravity, self._gravity_biped) > 0.5).astype(jp.float32)
+                       * jp.exp(-0.5 * jp.sum(jp.square(data.qpos[self._leg_qadr] - self._leg_q_stance))),
             "fore_contact": contacts["fore"].astype(jp.float32),
             "body_contact": contacts["body"].astype(jp.float32),
             "action_rate": jp.sum(jp.square(action - info["last_action"])),

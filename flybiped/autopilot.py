@@ -42,7 +42,7 @@ WALK_MAX_CHUNKS = 6
 GETUP_STAGE = {"name": "getup", "override": {"init.biped_start": 0.0, "init.drop_start": 0.5, "init.flip_start": 0.5,
                                              "assist": 0.0, "push.enable": False,
                                              "reward.orientation": 1.0, "reward.upright": 2.0, "reward.height": 2.0,
-                                             "reward.action_rate": -0.001}}
+                                             "reward.posture": 1.0, "reward.action_rate": -0.001}}
 GETUP_OK_FLIP = 0.3      # bipedal fraction from the flipped start (no harness) that ends the drill
 GETUP_MAX_CHUNKS = 4
 STAGES = [  # stand-up escalation ladder (used after the walk stage); assist starts where the walk stage left it
