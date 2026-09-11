@@ -55,7 +55,9 @@ STAGES = [  # stand-up escalation ladder (used after the walk stage); assist sta
 ASSIST_LADDER = [0.8, 0.5, 0.3, 0.15, 0.0]
 STAND_OK = 0.25        # bipedal fraction of the episode that counts as "can stand"
 STAND_STUCK = 0.05
-GOALS_DONE = 2.0       # goals per 4 s episode, with assist 0 -> success
+GOALS_DONE = 8.0       # goals per 3 s CPU eval without harness -> success (raised once basic walking worked)
+BODY_DONE = 0.10       # max fraction of time with the body on the floor (mixed starts incl. falls)
+ALT_DONE = 0.85        # min touchdown alternation (real alternating gait)
 
 
 def last_evals(run: Path, n: int = 3) -> dict:
@@ -79,6 +81,7 @@ def last_evals(run: Path, n: int = 3) -> dict:
     return {"bipedal": mean("bipedal"), "goals": mean("goals"), "reward": mean("bipedal") + mean("goals"),
             "goals_noassist": mean("goals_noassist"), "bipedal_noassist": mean("bipedal_noassist"),
             "flight_noassist": mean("flight_noassist"), "alternation_noassist": mean("alternation_noassist"),
+            "body_noassist": mean("body_contact_noassist"),
             "flip_bipedal": sum(flip) / len(flip), "drop_bipedal": sum(drop) / len(drop), "steps": steps}
 
 
@@ -182,8 +185,8 @@ def main() -> None:
                 state["prev"] = ev
             k += 1
             continue
-        if (assist == 0.0 and ev["goals"] >= GOALS_DONE
-                and ev["flight_noassist"] <= 0.10 and ev["alternation_noassist"] >= 0.70):
+        if (assist == 0.0 and ev["goals_noassist"] >= GOALS_DONE and ev.get("body_noassist", 1.0) <= BODY_DONE
+                and ev["flight_noassist"] <= 0.10 and ev["alternation_noassist"] >= ALT_DONE):
             print("SUCCESS: alternating bipedal walking to goals without assist", flush=True); break
         if ev["bipedal"] >= STAND_OK:
             # Standing works: decay the assist (or keep going if already 0).
