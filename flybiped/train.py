@@ -85,7 +85,7 @@ def main() -> None:
         log.write(json.dumps(row) + "\n"); log.flush()
         keys = ("training/sps", "training/policy_loss", "training/v_loss", "training/entropy_loss", "training/learning_rate")
         print(f"[{row['time']/60:6.1f} min] step {step/1e6:7.2f}M  " +
-              "  ".join(f"{k.split('/')[-1]}={row[k]:.3f}" for k in keys if k in row), flush=True)
+              "  ".join(f"{k.split('/')[-1]}={row[k]:.3g}" for k in keys if k in row), flush=True)
 
     restore = None
     if args.restore:
