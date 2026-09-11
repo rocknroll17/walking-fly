@@ -37,6 +37,10 @@ start_trainer() {
     off=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['step_offset'])")
     args+=(--start runs/imported --phase "$phase" --assist "$assist" --step_offset "$off")
     echo "resuming from bundle: phase=$phase assist=$assist steps=$off"
+    # Publish the bundled policy to the viewer right away (no need to wait for the first new checkpoint).
+    local ck; ck=$(ls -d runs/imported/checkpoints/[0-9]* | tail -1)
+    JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES="" .venv/bin/python -m flybiped.export --checkpoint "$ck" --constants runs/imported/env_constants.json --step "$off" >/dev/null 2>&1 \
+      && echo "viewer policy set to the bundled checkpoint" || echo "note: could not export the bundled checkpoint for the viewer"
   elif [[ $FRESH -eq 0 ]]; then
     local latest; latest=$(ls -td runs/*/checkpoints 2>/dev/null | head -1 | xargs -r dirname || true)
     if [[ -n "$latest" ]]; then

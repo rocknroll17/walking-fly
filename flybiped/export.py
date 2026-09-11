@@ -62,14 +62,24 @@ def random_params(env: FlyBiped, sizes=(512, 256, 128)):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run", default=None)
+    ap.add_argument("--run", default=None, help="run dir with policy.pkl (from watch_export)")
+    ap.add_argument("--checkpoint", default=None, help="orbax checkpoint dir (e.g. runs/imported/checkpoints/000001234)")
+    ap.add_argument("--constants", default=None, help="env_constants.json to embed (default: computed from the model)")
+    ap.add_argument("--step", type=int, default=0, help="cumulative step count to display")
     ap.add_argument("--out", default=str(fm.ROOT / "web/assets/policy.json"))
     args = ap.parse_args()
     env = FlyBiped(config_overrides={"naconmax": 48}, physics=False)   # constants only: no GPU needed
-    params = load_params(Path(args.run) / "policy.pkl") if args.run else random_params(env)
+    if args.checkpoint:
+        from brax.training.agents.ppo import checkpoint as ckpt
+        params = ckpt.load(str(Path(args.checkpoint).resolve()))
+    elif args.run:
+        params = load_params(Path(args.run) / "policy.pkl")
+    else:
+        params = random_params(env)
     spec = export_numpy(params, env.action_size)
-    spec["env"] = env_constants(env)
-    spec["trained"] = bool(args.run)
+    spec["env"] = json.loads(Path(args.constants).read_text()) if args.constants else env_constants(env)
+    spec["trained"] = bool(args.run or args.checkpoint)
+    spec["step"] = args.step
     Path(args.out).write_text(json.dumps(spec))
     print(f"wrote {args.out} ({Path(args.out).stat().st_size/1e6:.1f} MB), obs={env.static_observation_size} act={env.action_size}")
 
