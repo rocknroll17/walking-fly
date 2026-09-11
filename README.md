@@ -21,6 +21,7 @@ bash scripts/run.sh start      # 학습(GPU) + 체크포인트 감시(CPU) + 웹
 - 실시간 뷰어: `http://<서버IP>:8765/viewer.html` (2분마다 최신 정책 자동 반영)
 - 상태/중지/로그: `bash scripts/run.sh status|stop|logs`
 - GPU 없이 뷰어만: `bash scripts/setup.sh --viewer` 후 `cd web && python3 -m http.server 8765`
+- 환경 변수로 조절: `CUDA_VISIBLE_DEVICES`(GPU 선택), `FLYBIPED_NUM_ENVS`(병렬 환경 수, 24GB GPU면 8192), `XLA_PYTHON_CLIENT_MEM_FRACTION`(JAX 메모리 비율, 기본 0.45), `FLYBIPED_EVAL_EVERY`(체크포인트 간격 스텝, 기본 500000)
 
 요구 사항: Linux, NVIDIA GPU(Volta 이상, 드라이버 ≥ 525, 8 GB VRAM 이상), Node.js ≥ 18(뷰어), 인터넷(최초 설치).
 EGL 헤드리스 렌더링이 없는 머신에서는 `MUJOCO_GL=osmesa bash scripts/run.sh start` 로 클립 렌더를 대체할 수 있습니다.

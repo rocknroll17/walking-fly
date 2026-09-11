@@ -106,7 +106,7 @@ def main() -> None:
     ap.add_argument("--assist", type=float, default=0.5, help="harness level to start the walk stage with")
     ap.add_argument("--phase", default="walk", choices=["walk", "standup", "getup"])
     ap.add_argument("--num_envs", type=int, default=int(os.environ.get("FLYBIPED_NUM_ENVS", 4096)))
-    ap.add_argument("--eval_every", type=float, default=5e5, help="steps between checkpoints")
+    ap.add_argument("--eval_every", type=float, default=float(os.environ.get("FLYBIPED_EVAL_EVERY", 5e5)), help="steps between checkpoints")
     ap.add_argument("--mem_fraction", type=float, default=float(os.environ.get("XLA_PYTHON_CLIENT_MEM_FRACTION", 0.45)))
     args = ap.parse_args()
     global ARGS
