@@ -10,6 +10,7 @@ penalised): the fly has to get up again by itself.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import jax
@@ -108,8 +109,11 @@ class FlyBiped(mjx_env.MjxEnv):
         if physics:
             # graph_mode NONE: the default Warp graph capture re-captures whenever JAX donates buffers to new
             # addresses, which leaked GPU memory every training iteration (OOM after the third one).
+            # Graph capture mode (FLYBIPED_GRAPH_MODE): NONE is leak-free but launches every kernel separately;
+            # WARP_STAGED captures once with staging buffers (MJX docs' recommendation) and is faster if stable.
             from mujoco.mjx.warp import types as mjxw_types
-            self._mjx_model = mjx.put_model(self._mj_model, impl="warp", graph_mode=mjxw_types.GraphMode.NONE)
+            mode = getattr(mjxw_types.GraphMode, os.environ.get("FLYBIPED_GRAPH_MODE", "NONE"))
+            self._mjx_model = mjx.put_model(self._mj_model, impl="warp", graph_mode=mode)
             if not self._config.warn_overflow:
                 self._mjx_model = self._mjx_model.tree_replace({"opt._impl.warn_overflow": 0})
         self._init_geometry()
