@@ -29,6 +29,7 @@ start_trainer() {
   if [[ -n "$RESUME" ]]; then
     # Continue from a bundle made by scripts/migrate.sh on another machine.
     rm -rf runs/imported && mkdir -p runs/imported && tar -xzf "$RESUME" -C runs/imported --strip-components=1
+    echo "{\"offset\": $(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['step_offset'] - int(json.load(open('runs/imported/resume.json'))['checkpoint']))")}" > runs/imported/step_offset.json
     local phase assist off
     phase=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['phase'])")
     assist=$(python3 -c "import json;print(json.load(open('runs/imported/resume.json'))['assist'])")

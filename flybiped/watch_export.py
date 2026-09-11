@@ -102,6 +102,26 @@ def main() -> None:
     args = ap.parse_args()
     from brax.training.agents.ppo import checkpoint
     last = None
+    # First run after a resume/migration: publish the newest checkpoint of ANY run immediately,
+    # so the viewer does not show the untrained placeholder until the first new checkpoint.
+    out_path = Path(args.out)
+    untrained = not out_path.exists() or not json.loads(out_path.read_text()).get("trained", False)
+    if untrained:
+        cands = [(newest_checkpoint(r), r) for r in (fm.ROOT / "runs").glob("*/") if (r / "env_constants.json").exists()]
+        cands = [(c, r) for c, r in cands if c is not None]
+        if cands:
+            ck, run = max(cands, key=lambda cr: cr[0].stat().st_mtime)
+            try:
+                consts = json.loads((run / "env_constants.json").read_text())
+                params = checkpoint.load(str(ck))
+                spec = export_numpy(params, consts["nu"]); spec["env"] = consts; spec["trained"] = True
+                off = run / "step_offset.json"
+                spec["step"] = int(ck.name) + (json.loads(off.read_text())["offset"] if off.exists() else 0)
+                spec["run"] = run.name
+                out_path.write_text(json.dumps(spec))
+                print(f"published existing checkpoint {run.name}/{ck.name} for the viewer", flush=True)
+            except Exception as e:
+                print(f"initial publish skipped: {e}", flush=True)
     while True:
         if args.follow and not Path(args.follow).exists():
             time.sleep(args.interval); continue          # nothing is training yet
