@@ -102,7 +102,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default=None, help="run dir whose latest checkpoint to continue from")
     ap.add_argument("--chunk", type=float, default=15e6)
-    ap.add_argument("--budget", type=float, default=400e6)
+    ap.add_argument("--budget", type=float, default=float("inf"), help="total steps for this launch (default: unlimited)")
     ap.add_argument("--stage", type=int, default=0)
     ap.add_argument("--tag", default=time.strftime("%H%M"), help="prefix so run dirs never collide with earlier launches")
     ap.add_argument("--step_offset", type=float, default=0, help="steps already trained before this launch (display only)")
@@ -187,7 +187,7 @@ def main() -> None:
             continue
         if (assist == 0.0 and ev["goals_noassist"] >= GOALS_DONE and ev.get("body_noassist", 1.0) <= BODY_DONE
                 and ev["flight_noassist"] <= 0.10 and ev["alternation_noassist"] >= ALT_DONE):
-            print("SUCCESS: alternating bipedal walking to goals without assist", flush=True); break
+            print("SUCCESS criteria met: alternating bipedal walking to goals without assist (continuing to refine)", flush=True)
         if ev["bipedal"] >= STAND_OK:
             # Standing works: decay the assist (or keep going if already 0).
             if assist > 0.0:

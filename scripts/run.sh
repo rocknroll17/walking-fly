@@ -26,7 +26,7 @@ start_watcher() {
 }
 start_trainer() {
   [[ -n "$(pid_of 'flybiped[.]autopilot')" ]] && return
-  local args=(--chunk "${FLYBIPED_CHUNK:-10e6}" --budget "${FLYBIPED_BUDGET:-2e9}")
+  local args=(--chunk "${FLYBIPED_CHUNK:-10e6}" --budget "${FLYBIPED_BUDGET:-inf}")   # runs until stopped by default
   if [[ -n "$RESUME" ]]; then
     # Continue from a bundle made by scripts/migrate.sh on another machine.
     rm -rf runs/imported && mkdir -p runs/imported && tar -xzf "$RESUME" -C runs/imported --strip-components=1
