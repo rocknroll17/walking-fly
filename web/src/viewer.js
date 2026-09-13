@@ -197,7 +197,7 @@ function reset(mode = 'stance') {
     q[3] = -x; q[4] = w; q[5] = z; q[6] = -y;
   }
   if (mode === 'drop') {                          // random orientation from a height (fall recovery)
-    q[2] = 1.0; const r = [0, 1, 2, 3].map(() => gauss()), n = Math.hypot(...r);
+    q[2] = 0.5; const r = [0, 1, 2, 3].map(() => gauss()), n = Math.hypot(...r);
     for (let i = 0; i < 4; i++) q[3 + i] = r[i] / n;
   }
   for (let i = 0; i < E.nq; i++) data.qpos[i] = q[i];
@@ -206,13 +206,11 @@ function reset(mode = 'stance') {
   state.lastAction.fill(0); state.reached = 0; state.trail.length = 0;
   state.gait = { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }; state.lastFc = [1, 1]; state.lastTd = -1;
   mujoco.mj_forward(model, data);
-  /* 
   if (mode === 'drop' || mode === 'flip') {       // like training: land and settle before the policy acts
     const n = Math.round((E.settle_time || 0.25) / model.opt.timestep);
     for (let i = 0; i < n; i++) mujoco.mj_step(model, data);
     data.time = 0;
   }
-  */
   sampleGoal();
   simTime = 0; substep = 0; wall0 = performance.now(); simAtWall0 = 0;
 }

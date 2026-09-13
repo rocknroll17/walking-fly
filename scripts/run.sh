@@ -67,9 +67,8 @@ case "$CMD" in
   stop)   stop_all; echo stopped ;;
   status) status ;;
   logs)
-    active_log=""; [[ -f runs/ACTIVE ]] && active_log="runs/$(basename $(cat runs/ACTIVE)).log"
-    tail -n 20 runs/autopilot.log $active_log runs/watch_export.log 2>/dev/null
-    ;;
+    active_log=""; [[ -f runs/ACTIVE ]] && active_log="runs/$(basename "$(cat runs/ACTIVE)").log"
+    tail -n 20 runs/autopilot.log $active_log runs/watch_export.log 2>/dev/null ;;
   watcher) pgrep -f 'flybiped[.]watch_export' | xargs -r kill 2>/dev/null; sleep 1; start_watcher; echo "watcher restarted" ;;
   *) echo "usage: bash scripts/run.sh start|stop|status|logs|watcher [--port N] [--fresh] [--resume bundle]"; exit 1 ;;
 esac

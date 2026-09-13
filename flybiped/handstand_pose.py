@@ -1,9 +1,9 @@
-"""Find a statically balanced hind-leg standing pose for the bipedal fly.
+"""Find a statically balanced HANDSTAND pose: nose down, standing on the front legs (T1).
 
-Kinematic random search over body pitch and the 8 actuated hind-leg joints
-(mirrored left/right), followed by a short dynamic settle with the position
-actuators holding the pose. The result is saved to ``build/stand_pose.json``
-and used by the environment as the nominal initial state.
+Kinematic random search over body pitch and the 8 actuated front-leg joints
+(mirrored left/right), followed by a dynamic stability test with the position
+actuators holding the pose. The result is saved to ``build/handstand_pose.json``
+and used by the environment as the nominal "standing" state.
 """
 from __future__ import annotations
 

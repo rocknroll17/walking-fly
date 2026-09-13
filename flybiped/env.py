@@ -52,12 +52,12 @@ def default_config() -> config_dict.ConfigDict:
             reach=20.0,        # goal reached (bipedal), goal respawns
             facing=0.1,        # heading towards the goal, only while bipedal
             stall=-0.05,       # bipedal but not moving while far from the goal
-            bipedal=1.0,       # strict "standing on the front legs" indicator
-            height=0.0,        # thorax height is tricky for handstand, rely on orientation instead
-            orientation=1.0,   # handstand orientation from handstand_pose.json
-            upright=1.0,       # self-righting toward handstand
-            posture=1.0,       # keep T1 planted
-            fore_contact=-5.0, # any front/middle leg touching the floor -> Extreme penalty (lava floor for front legs)
+            bipedal=1.0,       # strict "standing on the front legs (handstand)" indicator
+            height=0.5,        # thorax height ramp from the six-leg stance to the handstand height
+            orientation=1.0,   # nose-down handstand orientation (from handstand_pose.json)
+            upright=1.0,       # smooth cosine term towards the handstand orientation (has gradient everywhere)
+            posture=1.0,       # front-leg joints near the handstand pose angles once nose-down
+            fore_contact=-1.0, # middle/hind legs touching the floor (not allowed in a handstand)
             body_contact=-1.0, # thorax/head/abdomen/wings touching the floor
             action_rate=-0.002,
             wing_effort=0.0,     # (Removed) Let it use wings freely for balance
@@ -89,9 +89,9 @@ def default_config() -> config_dict.ConfigDict:
             azimuth_limit_deg=155.0,   # Drosophila: ~50 deg posterior blind spot (Zhao et al., Nature 2025)
         ),
         height_stance=0.12,
-        height_target=0.18,
-        biped_min_height=0.14,
-        clearance=0.03,        # cm, lowered because T1 handstand brings the whole body closer to the floor
+        height_target=0.16,    # thorax height of the handstand pose
+        biped_min_height=0.13,
+        clearance=0.01,        # cm, middle/hind legs count as lifted above this
     )
 
 
@@ -131,11 +131,14 @@ class FlyBiped(mjx_env.MjxEnv):
         m = self._mj_model
         gname = lambda g: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or ""  # noqa: E731
         coll = [g for g in range(1, m.ngeom) if m.geom_contype[g] or m.geom_conaffinity[g]]
-        self._hind_geoms = jp.array([g for g in coll if "T1" in gname(g) and "tars" in gname(g)])
+        # Handstand: the FRONT legs (T1) are the support legs; middle/hind legs must stay off the floor.
+        # Any part of a front leg may touch (the fly may "kneel" on the front tibiae, as the hind-leg
+        # version allowed for T3); the body (head, thorax, abdomen, wings) must not.
+        self._hind_geoms = jp.array([g for g in coll if "T1" in gname(g)])
         self._fore_geoms = jp.array([g for g in coll if "T3" in gname(g) or "T2" in gname(g)])
-        self._body_geoms = jp.array([g for g in coll if not any(t in gname(g) for t in ("T1", "T2", "T3")) or ("T1" in gname(g) and "tars" not in gname(g))])
-        self._hind_left = jp.array([g for g in coll if "T1_left" in gname(g) and "tars" in gname(g)])
-        self._hind_right = jp.array([g for g in coll if "T1_right" in gname(g) and "tars" in gname(g)])
+        self._body_geoms = jp.array([g for g in coll if not any(t in gname(g) for t in ("T1", "T2", "T3"))])
+        self._hind_left = jp.array([g for g in coll if "T1_left" in gname(g)])
+        self._hind_right = jp.array([g for g in coll if "T1_right" in gname(g)])
         self._claw_sites = jp.array([m.site("claw_T1_left").id, m.site("claw_T1_right").id])
         lo, hi = m.jnt_range[1:, 0], m.jnt_range[1:, 1]          # hinge joints (free joint excluded)
         c, r = 0.5 * (lo + hi), hi - lo
@@ -178,7 +181,7 @@ class FlyBiped(mjx_env.MjxEnv):
         self._ctrl_biped = jp.array(pose["ctrl"])
         self._ctrl0 = self._ctrl_stance   # action centre
         self._leg_q_stance = self._q_stance[self._leg_qadr]
-        self._hind_q_stance = self._q_stance[self._hind_qadr]
+        self._hind_q_target = self._q_biped[self._hind_qadr]   # front-leg angles of the handstand pose
         q = self._q_biped[3:7]
         self._gravity_biped = mjx_math.rotate(jp.array([0.0, 0, -1]), mjx_math.quat_inv(q))
 
@@ -450,10 +453,9 @@ class FlyBiped(mjx_env.MjxEnv):
             "height": jp.clip((height - cfg.height_stance) / (cfg.height_target - cfg.height_stance), 0.0, 1.0),
             "orientation": jp.exp(-2.0 * jp.sum(jp.square(gravity - self._gravity_biped))),
             "upright": 0.5 * (1.0 + jp.dot(gravity, self._gravity_biped)),   # -1 (on its back) .. +1 (upright) -> 0..1
-            # Once the body faces up, pull the hind legs back to the stance angles so it stands instead of lying on them.
-            # We only apply this to hind legs (_T3) so front legs aren't encouraged to point at the ground.
+            # Once the body is nose-down, pull the front legs towards the handstand pose angles.
             "posture": (jp.dot(gravity, self._gravity_biped) > 0.5).astype(jp.float32)
-                       * jp.exp(-0.5 * jp.sum(jp.square(data.qpos[self._hind_qadr] - self._hind_q_stance))),
+                       * jp.exp(-0.5 * jp.sum(jp.square(data.qpos[self._hind_qadr] - self._hind_q_target))),
             "fore_contact": contacts["fore"].astype(jp.float32),
             "body_contact": contacts["body"].astype(jp.float32),
             "action_rate": jp.sum(jp.square(action - info["last_action"])),

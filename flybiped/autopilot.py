@@ -46,7 +46,7 @@ GETUP_STAGE = {"name": "getup", "override": {"init.biped_start": 0.0, "init.drop
 GETUP_OK_FLIP = 0.3      # bipedal fraction from the flipped start (no harness) that ends the drill
 GETUP_MAX_CHUNKS = 4
 STAGES = [  # stand-up escalation ladder (used after the walk stage); assist starts where the walk stage left it
-    {"name": "standup", "override": {"init.biped_start": 0.5, "init.drop_start": 0.20, "init.flip_start": 0.15, "assist": 0.2}},
+    {"name": "standup", "override": {"init.biped_start": 0.3, "init.drop_start": 0.25, "init.flip_start": 0.15}},
     {"name": "shape", "override": {"init.biped_start": 0.3, "init.drop_start": 0.25, "init.flip_start": 0.15,
                                    "reward.bipedal": 2.0, "reward.height": 2.0, "reward.orientation": 1.0}},
     {"name": "assist80", "override": {"init.biped_start": 0.4, "init.drop_start": 0.25, "init.flip_start": 0.15, "assist": 0.8,
@@ -90,16 +90,12 @@ def train_chunk(run: Path, restore: Path | None, steps: float, override: dict) -
     (run / "step_offset.json").write_text(json.dumps({"offset": int(STEP_OFFSET[0])}))
     (RUNS / "ACTIVE").write_text(str(run))
     cmd = [sys.executable, "-m", "flybiped.train", "--run", str(run), "--timesteps", str(steps),
-           "--num_envs", str(ARGS.num_envs), "--eval_every", str(ARGS.eval_every), "--override", json.dumps(override)]
+           "--num_envs", "4096", "--eval_every", "5e5", "--override", json.dumps(override)]
     if restore:
         cmd += ["--restore", str(restore)]
     with open(run.parent / f"{run.name}.log", "w") as log:
         subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=False,
-                       env={**__import__("os").environ, "MUJOCO_GL": "egl",
-                            "CUDA_VISIBLE_DEVICES": "0",
-                            "FLYBIPED_GRAPH_MODE": "WARP_STAGED_EX", 
-                            "XLA_PYTHON_CLIENT_PREALLOCATE": "false", 
-                            "XLA_PYTHON_CLIENT_ALLOCATOR": "platform"})
+                       env={**__import__("os").environ, "MUJOCO_GL": "egl", "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.45"})
 
 
 def main() -> None:
@@ -145,7 +141,6 @@ def main() -> None:
         run = RUNS / f"auto{args.tag}_{k:02d}_{stage['name']}{suffix}"
         run.mkdir(parents=True, exist_ok=True)
         print(f"== chunk {k}: {run.name} override={override} restore={restore}", flush=True)
-        print(f"   (Training started. JAX JIT compilation takes ~5 mins. See runs/{run.name}.log or use 'bash scripts/run.sh logs' to monitor progress.)", flush=True)
         state_file.write_text(json.dumps(state, indent=1))   # phase/assist visible while the chunk runs (migrate.sh)
         train_chunk(run, restore, args.chunk, override)
         ev = last_evals(run)

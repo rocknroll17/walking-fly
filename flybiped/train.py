@@ -78,7 +78,6 @@ def main() -> None:
     (run / "ppo_config.json").write_text(json.dumps(cfg, indent=1))
     log = open(run / "progress.jsonl", "a")
     t0 = time.time()
-    print(f"[{time.time()-t0:.1f}s] Starting JAX JIT compilation for PPO... (This takes ~5 minutes on the first run)", flush=True)
 
     def progress(step, metrics):
         row = {"step": int(step), "time": time.time() - t0,

@@ -43,6 +43,7 @@ say "building the bipedal model, standing poses and web meshes"
 export MUJOCO_GL=${MUJOCO_GL:-egl}
 .venv/bin/python -m flybiped.model
 .venv/bin/python -m flybiped.pose
+.venv/bin/python -m flybiped.handstand_pose
 .venv/bin/python -m flybiped.web_assets
 
 say "browser viewer dependencies (node)"
