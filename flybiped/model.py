@@ -151,6 +151,9 @@ def _add_scene(root) -> None:
              rgba=(1, 0.2, 0.1, 0.6), contype=0, conaffinity=0, group=0)
     goal.add("site", name="goal", size=(0.02,), rgba=(1, 1, 0, 1))
 
+def _add_counterweight(root) -> None:
+    pass  # Removed for handstand: natural front-heavy CoM is better for balancing on front legs.
+
 
 def _set_options(root) -> None:
     root.option.timestep = PHYSICS_DT
@@ -177,6 +180,7 @@ def build(out_dir: Path = BUILD_DIR) -> Path:
     _set_actuator_filters(root)
     _set_options(root)
     _add_scene(root)
+    _add_counterweight(root)
     out_dir.mkdir(parents=True, exist_ok=True)
     mjcf.export_with_assets(root, str(out_dir), "biped.xml")
     return out_dir / "biped.xml"

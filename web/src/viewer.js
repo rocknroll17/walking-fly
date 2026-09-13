@@ -82,9 +82,43 @@ const thoraxQuat = () => [0, 1, 2, 3].map((i) => data.xquat[E.thorax_body * 4 + 
 const thoraxPos = () => [0, 1, 2].map((i) => data.site_xpos[E.thorax_site * 3 + i]);
 
 const state = { goal: [1, 0, E.goal.height], lastAction: new Float32Array(E.nu), reached: 0, trail: [],
-                gait: { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }, lastFc: [1, 1], lastTd: -1 };
-const hindL = E.hind_geoms.filter(g => (geomName(g) || '').includes('T3_left')), hindR = E.hind_geoms.filter(g => (geomName(g) || '').includes('T3_right'));
+                gait: { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }, lastFc: [1, 1], lastTd: -1, lastMidFc: [0, 0] };
+const hindL = E.hind_geoms.filter(g => (geomName(g) || '').includes('T1_left')), hindR = E.hind_geoms.filter(g => (geomName(g) || '').includes('T1_right'));
+const midL = Array.from({length: model.ngeom}).map((_, i) => i).filter(g => model.geom_contype[g] > 0 && (geomName(g) || '').includes('T2_left'));
+const midR = Array.from({length: model.ngeom}).map((_, i) => i).filter(g => model.geom_contype[g] > 0 && (geomName(g) || '').includes('T2_right'));
 function geomName(g) { const a = model.name_geomadr[g]; let e = a; while (model.names[e] !== 0) e++; return new TextDecoder().decode(model.names.subarray(a, e)); }
+
+// Footprint system
+const footprints = [];
+const numFootprints = 200;
+const fpGeom = new THREE.CylinderGeometry(0.015, 0.015, 0.002, 16);
+const fpMat = new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.8 });
+function initFootprints() {
+  for(let i=0; i<numFootprints; i++) {
+    const m = new THREE.Mesh(fpGeom, fpMat.clone());
+    m.visible = false;
+    scene.add(m);
+    footprints.push({ mesh: m, time: 0 });
+  }
+}
+let fpIdx = 0;
+function dropFootprint(geoms) {
+  let minZ = Infinity, minG = -1;
+  for (const g of geoms) {
+    const z = lowestZ(g);
+    if (z < minZ) { minZ = z; minG = g; }
+  }
+  if (minG !== -1) {
+    const fp = footprints[fpIdx];
+    fpIdx = (fpIdx + 1) % numFootprints;
+    fp.mesh.visible = true;
+    fp.time = 5.0; // visible for 5.0 seconds
+    fp.mesh.material.opacity = 0.8;
+    setPos(data.geom_xpos, minG, fp.mesh.position);
+    fp.mesh.position.y = 0.001; // slightly above floor
+  }
+}
+
 function updateGait() {                  // same bookkeeping as flybiped.evaluate.CpuEnv
   const fc = [minLow(hindL) < 0.003 ? 1 : 0, minLow(hindR) < 0.003 ? 1 : 0];
   const c = contacts(), g = state.gait;
@@ -163,7 +197,7 @@ function reset(mode = 'stance') {
     q[3] = -x; q[4] = w; q[5] = z; q[6] = -y;
   }
   if (mode === 'drop') {                          // random orientation from a height (fall recovery)
-    q[2] = 0.5; const r = [0, 1, 2, 3].map(() => gauss()), n = Math.hypot(...r);
+    q[2] = 1.0; const r = [0, 1, 2, 3].map(() => gauss()), n = Math.hypot(...r);
     for (let i = 0; i < 4; i++) q[3 + i] = r[i] / n;
   }
   for (let i = 0; i < E.nq; i++) data.qpos[i] = q[i];
@@ -172,11 +206,13 @@ function reset(mode = 'stance') {
   state.lastAction.fill(0); state.reached = 0; state.trail.length = 0;
   state.gait = { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }; state.lastFc = [1, 1]; state.lastTd = -1;
   mujoco.mj_forward(model, data);
+  /* 
   if (mode === 'drop' || mode === 'flip') {       // like training: land and settle before the policy acts
     const n = Math.round((E.settle_time || 0.25) / model.opt.timestep);
     for (let i = 0; i < n; i++) mujoco.mj_step(model, data);
     data.time = 0;
   }
+  */
   sampleGoal();
   simTime = 0; substep = 0; wall0 = performance.now(); simAtWall0 = 0;
 }
@@ -201,6 +237,7 @@ for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j
 const floorTex = new THREE.CanvasTexture(cv); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(40, 40);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+initFootprints();
 // Trail of the thorax path.
 const trailGeom = new THREE.BufferGeometry(); const trailPos = new Float32Array(3 * 2000);
 trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPos, 3)); trailGeom.setDrawRange(0, 0);
@@ -291,9 +328,22 @@ function frame(now) {
       substep = (substep + 1) % E.n_substeps;
       if (substep === 0) {
         updateGait();
+        const midFcNow = [minLow(midL) < 0.003 ? 1 : 0, minLow(midR) < 0.003 ? 1 : 0];
+        if (midFcNow[0] && !state.lastMidFc[0]) dropFootprint(midL);
+        if (midFcNow[1] && !state.lastMidFc[1]) dropFootprint(midR);
+        state.lastMidFc = midFcNow;
+
         const fcNow = (minLow(hindL) < 0.003 ? 1 : 0) + (minLow(hindR) < 0.003 ? 1 : 0);
         if (goalDist() < E.goal.reach_radius && contacts().bipedal && fcNow >= 1) { state.reached++; sampleGoal(); flash(); }
         if (state.trail.length === 0 || simTime - state.trail[state.trail.length - 1][0] > 0.02) state.trail.push([simTime, ...thoraxPos()]);
+      }
+    }
+    // fade footprints
+    for (const fp of footprints) {
+      if (fp.mesh.visible) {
+        fp.time -= elapsed;
+        if (fp.time <= 0) fp.mesh.visible = false;
+        else fp.mesh.material.opacity = 0.8 * (fp.time / 5.0);
       }
     }
   }

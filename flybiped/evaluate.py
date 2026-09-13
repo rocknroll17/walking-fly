@@ -40,8 +40,8 @@ class CpuEnv:
         self.last_action = np.zeros(E["nu"], np.float32)
         self.goal = np.zeros(3)
         self.reached = 0
-        self.hind_left = np.array([g for g in self.hind if "T3_left" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")])
-        self.hind_right = np.array([g for g in self.hind if "T3_right" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")])
+        self.hind_left = np.array([g for g in self.hind if "T1_left" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")], dtype=int)
+        self.hind_right = np.array([g for g in self.hind if "T1_right" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")], dtype=int)
         self.gait = {"flight": 0, "walk_steps": 0, "td_alt": 0, "td_same": 0, "td_both": 0}
         self._last_fc = np.ones(2); self._last_td = -1
 

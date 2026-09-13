@@ -39,7 +39,7 @@ def default_config() -> config_dict.ConfigDict:
             dist_min=0.4, dist_max=1.5, height=0.2, reach_radius=0.2,
         ),
         init=config_dict.create(
-            biped_start=0.2,           # start already reared up on the hind legs
+            biped_start=0.0,           # start already reared up on the hind legs
             drop_start=0.3,            # dropped in a random orientation (fall recovery)
             flip_start=0.0,            # starts lying on its back (recovery from a backward fall)
             drop_height=0.5, drop_joint_noise=0.2, settle_time=0.25,
@@ -52,16 +52,16 @@ def default_config() -> config_dict.ConfigDict:
             reach=20.0,        # goal reached (bipedal), goal respawns
             facing=0.1,        # heading towards the goal, only while bipedal
             stall=-0.05,       # bipedal but not moving while far from the goal
-            bipedal=1.0,       # strict "standing on the hind legs" indicator
-            height=1.0,        # thorax height ramp from stance to bipedal height
-            orientation=0.5,   # thorax orientation like the bipedal pose (sharp, near the target)
-            upright=0.5,       # smooth cosine term: has gradient even when upside down (self-righting)
-            posture=0.5,       # legs near the default stance angles once the body faces up (Go1 Getup "posture")
-            fore_contact=-0.3, # any front/middle leg touching the floor
+            bipedal=1.0,       # strict "standing on the front legs" indicator
+            height=0.0,        # thorax height is tricky for handstand, rely on orientation instead
+            orientation=1.0,   # handstand orientation from handstand_pose.json
+            upright=1.0,       # self-righting toward handstand
+            posture=1.0,       # keep T1 planted
+            fore_contact=-5.0, # any front/middle leg touching the floor -> Extreme penalty (lava floor for front legs)
             body_contact=-1.0, # thorax/head/abdomen/wings touching the floor
             action_rate=-0.002,
-            wing_effort=-0.005,
-            wing_pose=-0.05,     # wings away from their folded rest pose (springref): keep them folded unless useful
+            wing_effort=0.0,     # (Removed) Let it use wings freely for balance
+            wing_pose=0.0,       # (Removed) Let it unfold wings for balance
             leg_effort=-0.0005,
             # Standard locomotion regularisers (MuJoCo Playground Go1 joystick / legged_gym),
             # re-scaled to fly units (cm, cm/s, rad/s) so each is O(0.1) per step.
@@ -89,9 +89,9 @@ def default_config() -> config_dict.ConfigDict:
             azimuth_limit_deg=155.0,   # Drosophila: ~50 deg posterior blind spot (Zhao et al., Nature 2025)
         ),
         height_stance=0.12,
-        height_target=0.21,
-        biped_min_height=0.16,
-        clearance=0.006,       # cm, a leg counts as "off the ground" above this
+        height_target=0.18,
+        biped_min_height=0.14,
+        clearance=0.03,        # cm, lowered because T1 handstand brings the whole body closer to the floor
     )
 
 
@@ -131,18 +131,19 @@ class FlyBiped(mjx_env.MjxEnv):
         m = self._mj_model
         gname = lambda g: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or ""  # noqa: E731
         coll = [g for g in range(1, m.ngeom) if m.geom_contype[g] or m.geom_conaffinity[g]]
-        self._hind_geoms = jp.array([g for g in coll if "T3" in gname(g)])
-        self._fore_geoms = jp.array([g for g in coll if "T1" in gname(g) or "T2" in gname(g)])
-        self._body_geoms = jp.array([g for g in coll if not any(t in gname(g) for t in ("T1", "T2", "T3"))])
-        self._hind_left = jp.array([g for g in coll if "T3_left" in gname(g)])
-        self._hind_right = jp.array([g for g in coll if "T3_right" in gname(g)])
-        self._claw_sites = jp.array([m.site("claw_T3_left").id, m.site("claw_T3_right").id])
+        self._hind_geoms = jp.array([g for g in coll if "T1" in gname(g) and "tars" in gname(g)])
+        self._fore_geoms = jp.array([g for g in coll if "T3" in gname(g) or "T2" in gname(g)])
+        self._body_geoms = jp.array([g for g in coll if not any(t in gname(g) for t in ("T1", "T2", "T3")) or ("T1" in gname(g) and "tars" not in gname(g))])
+        self._hind_left = jp.array([g for g in coll if "T1_left" in gname(g) and "tars" in gname(g)])
+        self._hind_right = jp.array([g for g in coll if "T1_right" in gname(g) and "tars" in gname(g)])
+        self._claw_sites = jp.array([m.site("claw_T1_left").id, m.site("claw_T1_right").id])
         lo, hi = m.jnt_range[1:, 0], m.jnt_range[1:, 1]          # hinge joints (free joint excluded)
         c, r = 0.5 * (lo + hi), hi - lo
         self._soft_lo, self._soft_hi = jp.array(c - 0.475 * r), jp.array(c + 0.475 * r)
         self._geom_size = jp.array(m.geom_size)
         self._geom_type = jp.array(m.geom_type)
         self._thorax = m.body("thorax").id
+        self._abdomen = m.body("abdomen").id
         self._thorax_site = m.site("thorax").id
         self._head_site = m.site("head").id
         self._goal_geom = m.geom("goal").id
@@ -160,6 +161,7 @@ class FlyBiped(mjx_env.MjxEnv):
         self._adh_act = jp.array([i for i, n in enumerate(aname) if "adhere" in n])
         self._leg_act = jp.array([i for i, n in enumerate(aname) if "_T" in n and "adhere" not in n])
         self._leg_qadr = jp.array([m.jnt_qposadr[j] for j in range(m.njnt) if "_T" in m.joint(j).name])
+        self._hind_qadr = jp.array([m.jnt_qposadr[j] for j in range(m.njnt) if "_T1" in m.joint(j).name])
         self._weight = float(m.body_subtreemass[self._thorax] * -m.opt.gravity[2])   # dyn
         self._ctrl_lo = jp.array(m.actuator_ctrlrange[:, 0])
         self._ctrl_hi = jp.array(m.actuator_ctrlrange[:, 1])
@@ -169,13 +171,14 @@ class FlyBiped(mjx_env.MjxEnv):
         self._wing_rest = jp.array([m.qpos_spring[m.jnt_qposadr[j]] for j in wing_j])
 
     def _init_pose(self) -> None:
-        pose = json.loads(fp.POSE_JSON.read_text())
+        pose = json.loads((fm.BUILD_DIR / "handstand_pose.json").read_text())
         self._q_stance = jp.array(pose["qpos_stance"])
         self._ctrl_stance = jp.array(pose["ctrl_stance"])
         self._q_biped = jp.array(pose["qpos_settled"])
         self._ctrl_biped = jp.array(pose["ctrl"])
         self._ctrl0 = self._ctrl_stance   # action centre
         self._leg_q_stance = self._q_stance[self._leg_qadr]
+        self._hind_q_stance = self._q_stance[self._hind_qadr]
         q = self._q_biped[3:7]
         self._gravity_biped = mjx_math.rotate(jp.array([0.0, 0, -1]), mjx_math.quat_inv(q))
 
@@ -233,7 +236,7 @@ class FlyBiped(mjx_env.MjxEnv):
             impl=self.mjx_model.impl.value,
             naconmax=self._config.naconmax, njmax=self._config.njmax)
         lift = self._config.assist * self._weight
-        data = data.replace(xfrc_applied=data.xfrc_applied.at[self._thorax, 2].set(lift))
+        data = data.replace(xfrc_applied=data.xfrc_applied.at[self._abdomen, 2].set(lift))
         data = mjx.forward(self.mjx_model, data)
         # Let dropped flies land and settle (all worlds pay the cost; only drops need it).
         settle_steps = int(cfg.settle_time / self._config.sim_dt)
@@ -447,9 +450,10 @@ class FlyBiped(mjx_env.MjxEnv):
             "height": jp.clip((height - cfg.height_stance) / (cfg.height_target - cfg.height_stance), 0.0, 1.0),
             "orientation": jp.exp(-2.0 * jp.sum(jp.square(gravity - self._gravity_biped))),
             "upright": 0.5 * (1.0 + jp.dot(gravity, self._gravity_biped)),   # -1 (on its back) .. +1 (upright) -> 0..1
-            # Once the body faces up, pull the legs back to the stance angles so it stands instead of lying on them.
+            # Once the body faces up, pull the hind legs back to the stance angles so it stands instead of lying on them.
+            # We only apply this to hind legs (_T3) so front legs aren't encouraged to point at the ground.
             "posture": (jp.dot(gravity, self._gravity_biped) > 0.5).astype(jp.float32)
-                       * jp.exp(-0.5 * jp.sum(jp.square(data.qpos[self._leg_qadr] - self._leg_q_stance))),
+                       * jp.exp(-0.5 * jp.sum(jp.square(data.qpos[self._hind_qadr] - self._hind_q_stance))),
             "fore_contact": contacts["fore"].astype(jp.float32),
             "body_contact": contacts["body"].astype(jp.float32),
             "action_rate": jp.sum(jp.square(action - info["last_action"])),
