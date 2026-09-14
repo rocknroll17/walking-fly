@@ -58,6 +58,7 @@ def default_config() -> config_dict.ConfigDict:
             upright=1.0,       # smooth cosine term towards the handstand orientation (has gradient everywhere)
             posture=1.0,       # front-leg joints near the handstand pose angles once nose-down
             fore_contact=-1.0, # middle/hind legs touching the floor (not allowed in a handstand)
+            fore_touch=-2.0,   # each NEW middle/hind-leg touchdown (a "kick" to propel is an event, not a state)
             body_contact=-1.0, # thorax/head/abdomen/wings touching the floor
             action_rate=-0.002,
             wing_effort=0.0,     # (Removed) Let it use wings freely for balance
@@ -92,6 +93,7 @@ def default_config() -> config_dict.ConfigDict:
         height_target=0.16,    # thorax height of the handstand pose
         biped_min_height=0.13,
         clearance=0.01,        # cm, middle/hind legs count as lifted above this
+        walk_gate_time=0.2,    # s of uninterrupted standing before progress/goal rewards count (kills kick-and-glide)
     )
 
 
@@ -256,6 +258,8 @@ class FlyBiped(mjx_env.MjxEnv):
             "last_dist": self._goal_dist(data, goal),
             "feet_air_time": jp.zeros(2),
             "last_td_foot": -jp.ones(()),      # -1 none, 0 left, 1 right: which hind foot touched down last
+            "biped_streak": jp.zeros(()),      # consecutive steps standing on the support legs only
+            "last_fore": jp.zeros(()),         # middle/hind legs were touching last step
             "push_t": jp.zeros(()),            # time until the next push starts
             "push_left": jp.zeros(()),         # remaining duration of the current push
             "push_force": jp.zeros(3),
@@ -313,6 +317,8 @@ class FlyBiped(mjx_env.MjxEnv):
             last_feet_contact=pick(jp.ones(2), info["last_feet_contact"]),
             last_claw_xy=pick(data.site_xpos[self._claw_sites][:, :2], info["last_claw_xy"]),
             last_td_foot=pick(-jp.ones(()), info["last_td_foot"]),
+            biped_streak=pick(jp.zeros(()), info["biped_streak"]),
+            last_fore=pick(jp.zeros(()), info["last_fore"]),
             push_t=pick(jp.zeros(()), info["push_t"]),
             push_left=pick(jp.zeros(()), info["push_left"]),
         )
@@ -334,10 +340,14 @@ class FlyBiped(mjx_env.MjxEnv):
 
         feet_contact = jp.array([jp.min(self._lowest_z(data, self._hind_left)) < 0.003,
                                  jp.min(self._lowest_z(data, self._hind_right)) < 0.003]).astype(jp.float32)
-        # Walking = standing on the hind legs with at least one foot on the ground.
+        # Walking = standing on the support legs (with at least one foot down) for walk_gate_time without any
+        # middle/hind-leg contact: a kick-and-glide gets no progress reward.
         # Airborne = the whole fly off the floor (a hop): body clear, front legs clear, no hind contact.
-        walking = bipedal & (jp.sum(feet_contact) >= 1.0)
+        streak = jp.where(bipedal, state.info["biped_streak"] + 1.0, 0.0)
+        gate_steps = self._config.walk_gate_time / self._config.ctrl_dt
+        walking = bipedal & (jp.sum(feet_contact) >= 1.0) & (streak >= gate_steps)
         airborne = contacts["airborne"]
+        fore_touch = contacts["fore"].astype(jp.float32) * (1.0 - state.info["last_fore"])
         reached = reached & walking
         touchdown = feet_contact * (1.0 - state.info["last_feet_contact"])
         n_td = jp.sum(touchdown)
@@ -347,6 +357,7 @@ class FlyBiped(mjx_env.MjxEnv):
                     jp.where(n_td == 1.0, jp.where(td_foot == last_foot, -0.5, 1.0), 0.0)) * walking.astype(jp.float32)
         new_last = jp.where(n_td == 1.0, td_foot, jp.where(n_td == 2.0, -1.0, last_foot))
         rewards = self._rewards(data, state.info, action, dist, reached, contacts, feet_contact, walking, alternate, airborne)
+        rewards["fore_touch"] = fore_touch
         reward = sum(rewards[k] * v for k, v in self._config.reward.items())
         reward = jp.where(nan, 0.0, reward)
 
@@ -361,6 +372,7 @@ class FlyBiped(mjx_env.MjxEnv):
         dist = jp.where(nan, 0.0, dist)                 # never carry NaN into the next episode's progress
         state.info.update(rng=rng, goal=goal, last_action=action, last_dist=dist,
                           feet_air_time=air, last_feet_contact=feet_contact, last_td_foot=new_last,
+                          biped_streak=streak, last_fore=contacts["fore"].astype(jp.float32),
                           last_claw_xy=jp.nan_to_num(data.site_xpos[self._claw_sites][:, :2]))
         state.metrics.update({f"reward/{k}": v for k, v in rewards.items()})
         # Brax sums metrics over an episode: log per-step indicators, not running totals.

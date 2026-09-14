@@ -26,6 +26,7 @@ def env_constants(env: FlyBiped) -> dict:
     return {
         "ctrl_dt": cfg.ctrl_dt, "sim_dt": cfg.sim_dt, "n_substeps": int(round(cfg.ctrl_dt / cfg.sim_dt)),
         "assist": float(cfg.assist), "weight": env._weight, "settle_time": float(cfg.init.settle_time),
+        "walk_gate_time": float(cfg.walk_gate_time),
         "action_scale": cfg.action_scale, "clearance": cfg.clearance,
         "goal": dict(cfg.goal),
         "ctrl0": np.asarray(env._ctrl0).tolist(),

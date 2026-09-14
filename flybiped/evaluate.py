@@ -43,7 +43,7 @@ class CpuEnv:
         self.hind_left = np.array([g for g in self.hind if "T1_left" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")], dtype=int)
         self.hind_right = np.array([g for g in self.hind if "T1_right" in (mujoco.mj_id2name(self.m, mujoco.mjtObj.mjOBJ_GEOM, int(g)) or "")], dtype=int)
         self.gait = {"flight": 0, "walk_steps": 0, "td_alt": 0, "td_same": 0, "td_both": 0}
-        self._last_fc = np.ones(2); self._last_td = -1
+        self._last_fc = np.ones(2); self._last_td = -1; self._streak = 0
 
     # geometry helpers -----------------------------------------------------
     def lowest_z(self, geoms):
@@ -100,7 +100,7 @@ class CpuEnv:
             d.time = 0.0
         self.last_action[:] = 0; self.reached = 0
         self.gait = {"flight": 0, "walk_steps": 0, "td_alt": 0, "td_same": 0, "td_both": 0}
-        self._last_fc = np.ones(2); self._last_td = -1
+        self._last_fc = np.ones(2); self._last_td = -1; self._streak = 0
         self.sample_goal()
         return self.observe()
 
@@ -135,7 +135,9 @@ class CpuEnv:
         self.last_action[:] = action
         # Gait bookkeeping: flight phases and touchdown alternation while standing on the hind legs.
         fc = np.array([self.lowest_z(self.hind_left).min() < 0.003, self.lowest_z(self.hind_right).min() < 0.003], float)
-        bip = self.bipedal(); walking = bip and fc.sum() >= 1
+        bip = self.bipedal()
+        self._streak = self._streak + 1 if bip else 0
+        walking = bip and fc.sum() >= 1 and self._streak >= E.get("walk_gate_time", 0.0) / E["ctrl_dt"]
         fore_clear = self.lowest_z(self.fore).min() > E["clearance"]
         body_clear = self.lowest_z(self.body).min() >= 0
         airborne = fore_clear and body_clear and fc.sum() == 0 and self.thorax()[2] > E["biped_min_height"]

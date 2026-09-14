@@ -81,7 +81,7 @@ function quatRotate(q, v) {      // rotate vector v by quaternion q (w,x,y,z)
 const thoraxQuat = () => [0, 1, 2, 3].map((i) => data.xquat[E.thorax_body * 4 + i]);
 const thoraxPos = () => [0, 1, 2].map((i) => data.site_xpos[E.thorax_site * 3 + i]);
 
-const state = { goal: [1, 0, E.goal.height], lastAction: new Float32Array(E.nu), reached: 0, trail: [],
+const state = { goal: [1, 0, E.goal.height], lastAction: new Float32Array(E.nu), reached: 0, trail: [], streak: 0,
                 gait: { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }, lastFc: [1, 1], lastTd: -1, lastMidFc: [0, 0] };
 const hindL = E.hind_geoms.filter(g => (geomName(g) || '').includes('T1_left')), hindR = E.hind_geoms.filter(g => (geomName(g) || '').includes('T1_right'));
 const midL = Array.from({length: model.ngeom}).map((_, i) => i).filter(g => model.geom_contype[g] > 0 && (geomName(g) || '').includes('T2_left'));
@@ -204,7 +204,7 @@ function reset(mode = 'stance') {
   applyAssist();
   for (let i = 0; i < E.nu; i++) { data.ctrl[i] = c[i]; if (E.act_adr[i] >= 0) data.act[E.act_adr[i]] = c[i]; }
   state.lastAction.fill(0); state.reached = 0; state.trail.length = 0;
-  state.gait = { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }; state.lastFc = [1, 1]; state.lastTd = -1;
+  state.gait = { flight: 0, walk: 0, alt: 0, same: 0, both: 0 }; state.lastFc = [1, 1]; state.lastTd = -1; state.streak = 0;
   mujoco.mj_forward(model, data);
   if (mode === 'drop' || mode === 'flip') {       // like training: land and settle before the policy acts
     const n = Math.round((E.settle_time || 0.25) / model.opt.timestep);
@@ -332,7 +332,9 @@ function frame(now) {
         state.lastMidFc = midFcNow;
 
         const fcNow = (minLow(hindL) < 0.003 ? 1 : 0) + (minLow(hindR) < 0.003 ? 1 : 0);
-        if (goalDist() < E.goal.reach_radius && contacts().bipedal && fcNow >= 1) { state.reached++; sampleGoal(); flash(); }
+        const bipNow = contacts().bipedal; state.streak = bipNow ? state.streak + 1 : 0;
+        const gated = bipNow && fcNow >= 1 && state.streak >= (E.walk_gate_time || 0) / E.ctrl_dt;
+        if (goalDist() < E.goal.reach_radius && gated) { state.reached++; sampleGoal(); flash(); }
         if (state.trail.length === 0 || simTime - state.trail[state.trail.length - 1][0] > 0.02) state.trail.push([simTime, ...thoraxPos()]);
       }
     }
