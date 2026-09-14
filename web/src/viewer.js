@@ -332,7 +332,8 @@ function frame(now) {
         state.lastMidFc = midFcNow;
 
         const fcNow = (minLow(hindL) < 0.003 ? 1 : 0) + (minLow(hindR) < 0.003 ? 1 : 0);
-        const bipNow = contacts().bipedal; state.streak = bipNow ? state.streak + 1 : 0;
+        const cNow = contacts(), bipNow = cNow.bipedal;
+        state.streak = (cNow.fore || cNow.body) ? 0 : state.streak + 1;   // steps since last kick/body contact
         const gated = bipNow && fcNow >= 1 && state.streak >= (E.walk_gate_time || 0) / E.ctrl_dt;
         if (goalDist() < E.goal.reach_radius && gated) { state.reached++; sampleGoal(); flash(); }
         if (state.trail.length === 0 || simTime - state.trail[state.trail.length - 1][0] > 0.02) state.trail.push([simTime, ...thoraxPos()]);

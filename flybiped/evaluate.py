@@ -136,7 +136,8 @@ class CpuEnv:
         # Gait bookkeeping: flight phases and touchdown alternation while standing on the hind legs.
         fc = np.array([self.lowest_z(self.hind_left).min() < 0.003, self.lowest_z(self.hind_right).min() < 0.003], float)
         bip = self.bipedal()
-        self._streak = self._streak + 1 if bip else 0
+        kicked = self.lowest_z(self.fore).min() < 0.003 or self.lowest_z(self.body).min() < 0
+        self._streak = 0 if kicked else self._streak + 1
         walking = bip and fc.sum() >= 1 and self._streak >= E.get("walk_gate_time", 0.0) / E["ctrl_dt"]
         fore_clear = self.lowest_z(self.fore).min() > E["clearance"]
         body_clear = self.lowest_z(self.body).min() >= 0
